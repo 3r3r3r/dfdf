@@ -6045,6 +6045,101 @@ function initSwipeNavigation() {
 // Инициализация свайп-навигации после загрузки DOM
 initSwipeNavigation();
   
+ // Переменные для страницы отзывов
+let reviewsPageInitialized = false;
+const REVIEWS_STORAGE_KEY = 'follen_shaid_reviews';
+
+// Функция для показа страницы отзывов
+function showReviewsPage() {
+  // Скрываем все страницы
+  const allPages = [mainPage, cabinetPage, treasurePage, storagePage, paymentPage, reviewsPage];
+  allPages.forEach(page => {
+    if (page) page.style.display = 'none';
+  });
+  
+  // Показываем страницу отзывов
+  reviewsPage.style.display = 'block';
+  
+  // Инициализируем страницу отзывов при первом открытии
+  if (!reviewsPageInitialized) {
+    initReviewsPage();
+    reviewsPageInitialized = true;
+  }
+  
+  // Обновляем активную навигацию (ничего не выделяем)
+  updateActiveNav(null);
+  triggerVibration();
+}
+
+// Функция для скрытия страницы отзывов
+function hideReviewsPage() {
+  reviewsPage.style.display = 'none';
+  showPage(cabinetPage); // Возвращаемся в каюту
+  updateActiveNav(document.getElementById('cabinet-nav-item'));
+  triggerVibration();
+}
+
+// Инициализация страницы отзывов
+function initReviewsPage() {
+  // Получаем элементы
+  const reviewText = document.getElementById('review-text');
+  const reviewSubmitBtn = document.getElementById('review-submit-btn');
+  const reviewsListContainer = document.getElementById('reviews-list-container');
+  const reviewCharRemaining = document.getElementById('review-char-remaining');
+  const reviewProfanityError = document.getElementById('review-profanity-error');
+  const reviewRefreshBtn = document.getElementById('review-refresh-btn');
+  
+  // Генерация уникального ID пользователя
+  let userId, username;
+  if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
+    const user = Telegram.WebApp.initDataUnsafe.user;
+    userId = user.id.toString();
+    username = user.username || user.first_name || 'User_' + userId.substr(0, 4);
+  } else {
+    userId = 'user_' + Math.random().toString(36).substr(2, 9);
+    username = 'User_' + userId.substr(0, 4);
+  }
+  
+  // Список нецензурных слов
+  const profanityList = [
+    'бля', 'блять', 'хуй', 'пизда', 'ебал', 'ебать', 'нахер', 
+    'нахрен', 'гондон', 'мудак', 'сука', 'тварь', 'долбаёб'
+  ];
+  
+  // Проверяем, оставлял ли пользователь уже отзыв
+  const userReviewedKey = `user_reviewed_${userId}`;
+  if (localStorage.getItem(userReviewedKey)) {
+    hideReviewFormAndShowThankYou();
+  }
+  
+  // Загружаем существующие отзывы
+  loadReviews();
+  
+  // Обработчик кнопки обновления
+  reviewRefreshBtn.addEventListener('click', function() {
+    reviewRefreshBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Обновление...';
+    loadReviews();
+    setTimeout(() => {
+      reviewRefreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Обновить отзывы';
+      showReviewNotification('Отзывы обновлены');
+    }, 800);
+  });
+  
+  // Счетчик символов
+  reviewText.addEventListener('input', function() {
+    const remaining = 500 - reviewText.value.length;
+    reviewCharRemaining.textContent = remaining;
+    
+    if (remaining < 20) {
+      reviewCharRemaining.style.color = '#ff453a';
+    } else {
+      reviewCharRemaining.style.color = '#8e8e93';
+    }
+  });
+  
+  // Обработчик отправки отзыва
+  reviewSubmitBtn.addEventListener('click', submitReview);
+  
   // Обработчик отправки по Enter (с зажатым Ctrl)
   reviewText.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && e.ctrlKey) {
@@ -6224,7 +6319,7 @@ initSwipeNavigation();
   
   // Периодическое обновление отзывов (каждые 15 секунд)
   setInterval(loadReviews, 15000);
-
+}
 
 // Обновите обработчик кнопки "Отзывы" в каюте
 function setupReviewsButton() {
