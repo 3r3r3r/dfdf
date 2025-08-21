@@ -5850,7 +5850,7 @@ document.addEventListener('touchend', function(event) {
   lastTouchEnd = now;
 }, false);
 
-// ===== ОБЪЕДИНЕННАЯ СИСТЕМА СВАЙПОВ С АНИМАЦИЯМИ IPHONE =====
+// ===== ОБЪЕДИНЕННАЯ СИСТЕМА СВАЙПОВ С ПРОСТЫМИ АНИМАЦИЯМИ =====
 let touchStartX = 0;
 let touchStartY = 0;
 let isHorizontalSwipe = false;
@@ -5860,12 +5860,6 @@ const SWIPE_THRESHOLD = 50;
 const productsPage = document.getElementById('products-page');
 const bottomNav = document.querySelector('.bottom-nav');
 
-// Анимационные настройки в стиле iOS
-const IOS_ANIMATION = {
-  duration: 400,
-  easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)' // Более плавная кривая
-};
-
 // Функция для определения направления свайпа
 function handleSwipeGesture(currentPage, touchEndX, touchEndY) {
   const diffX = touchEndX - touchStartX;
@@ -5874,21 +5868,21 @@ function handleSwipeGesture(currentPage, touchEndX, touchEndY) {
   if (isHorizontalSwipe && Math.abs(diffX) > SWIPE_THRESHOLD) {
     // Горизонтальные свайпы для навигации
     if (diffX > 0) {
-      // Свайп вправо - каюта появляется слева
+      // Свайп вправо - каюта появляется
       if (currentPage === 'main-page') {
-        animatePageTransition(mainPage, cabinetPage, 'from-left');
+        showPage(cabinetPage);
         updateActiveNav(document.getElementById('cabinet-nav-item'));
       } else if (currentPage === 'storage-page') {
-        animatePageTransition(storagePage, mainPage, 'from-left');
+        showPage(mainPage);
         updateActiveNav(null);
       }
     } else {
-      // Свайп влево - склад появляется справа
+      // Свайп влево - склад появляется
       if (currentPage === 'main-page') {
-        animatePageTransition(mainPage, storagePage, 'from-right');
+        showPage(storagePage);
         updateActiveNav(document.getElementById('storage-nav-item'));
       } else if (currentPage === 'cabinet-page') {
-        animatePageTransition(cabinetPage, mainPage, 'from-right');
+        showPage(mainPage);
         updateActiveNav(null);
       }
     }
@@ -5902,132 +5896,76 @@ function handleSwipeGesture(currentPage, touchEndX, touchEndY) {
   }
 }
 
-// Анимация перехода между страницами
-function animatePageTransition(fromPage, toPage, direction) {
-  // Сохраняем оригинальные стили
-  const originalFromDisplay = fromPage.style.display;
-  const originalToDisplay = toPage.style.display;
-  
-  // Устанавливаем начальные стили для анимации
-  toPage.style.display = 'block';
-  toPage.style.position = 'fixed';
-  toPage.style.top = '0';
-  toPage.style.left = '0';
-  toPage.style.width = '100%';
-  toPage.style.height = '100%';
-  toPage.style.zIndex = '1000';
-  toPage.style.willChange = 'transform';
-  toPage.style.transition = `transform ${IOS_ANIMATION.duration}ms ${IOS_ANIMATION.easing}`;
-  
-  fromPage.style.position = 'fixed';
-  fromPage.style.top = '0';
-  fromPage.style.left = '0';
-  fromPage.style.width = '100%';
-  fromPage.style.height = '100%';
-  fromPage.style.zIndex = '999';
-  fromPage.style.willChange = 'transform';
-  fromPage.style.transition = `transform ${IOS_ANIMATION.duration}ms ${IOS_ANIMATION.easing}`;
-  
-  // Устанавливаем начальные позиции
-  if (direction === 'from-left') {
-    toPage.style.transform = 'translateX(-100%)';
-    fromPage.style.transform = 'translateX(0)';
-  } else { // from-right
-    toPage.style.transform = 'translateX(100%)';
-    fromPage.style.transform = 'translateX(0)';
-  }
-  
-  // Принудительный reflow для запуска анимации
-  toPage.offsetHeight;
-  
-  // Запускаем анимацию
-  requestAnimationFrame(() => {
-    if (direction === 'from-left') {
-      toPage.style.transform = 'translateX(0)';
-      fromPage.style.transform = 'translateX(100%)';
-    } else {
-      toPage.style.transform = 'translateX(0)';
-      fromPage.style.transform = 'translateX(-100%)';
+// Простая функция показа страницы с fade-эффектом
+function showPage(pageToShow) {
+  // Сначала скрываем все страницы
+  const pages = [mainPage, cabinetPage, storagePage, treasurePage];
+  pages.forEach(page => {
+    if (page && page !== pageToShow) {
+      page.style.display = 'none';
     }
   });
   
-  // Восстанавливаем стили после анимации
-  setTimeout(() => {
-    toPage.style.position = '';
-    toPage.style.top = '';
-    toPage.style.left = '';
-    toPage.style.width = '';
-    toPage.style.height = '';
-    toPage.style.zIndex = '';
-    toPage.style.willChange = '';
-    toPage.style.transform = '';
-    toPage.style.transition = '';
-    toPage.style.display = originalToDisplay;
+  // Показываем нужную страницу с анимацией
+  if (pageToShow) {
+    pageToShow.style.display = 'block';
+    pageToShow.style.opacity = '0';
+    pageToShow.style.transition = 'opacity 0.3s ease';
     
-    fromPage.style.position = '';
-    fromPage.style.top = '';
-    fromPage.style.left = '';
-    fromPage.style.width = '';
-    fromPage.style.height = '';
-    fromPage.style.zIndex = '';
-    fromPage.style.willChange = '';
-    fromPage.style.transform = '';
-    fromPage.style.transition = '';
-    fromPage.style.display = 'none';
-  }, IOS_ANIMATION.duration);
+    // Запускаем fade-in анимацию
+    setTimeout(() => {
+      pageToShow.style.opacity = '1';
+    }, 10);
+    
+    // Убираем transition после анимации
+    setTimeout(() => {
+      pageToShow.style.transition = '';
+      pageToShow.style.opacity = '';
+    }, 300);
+  }
 }
 
-// Функция для показа страницы товаров с анимацией iOS
+// Функция для показа страницы товаров
 function showProductsPage() {
   productsPageVisible = true;
-  
-  // Анимация навигации
-  bottomNav.style.transition = `transform ${IOS_ANIMATION.duration}ms ${IOS_ANIMATION.easing}`;
+  bottomNav.style.transition = 'transform 0.3s ease';
   bottomNav.style.transform = 'translateY(100%)';
-  
-  // Анимация страницы товаров
   productsPage.style.display = 'block';
-  productsPage.style.willChange = 'transform';
-  productsPage.style.transform = 'translateY(100%)';
-  productsPage.style.transition = `transform ${IOS_ANIMATION.duration}ms ${IOS_ANIMATION.easing}`;
+  productsPage.style.opacity = '0';
+  productsPage.style.transform = 'translateY(20px)';
+  productsPage.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
   
-  // Запускаем анимацию
-  requestAnimationFrame(() => {
+  setTimeout(() => {
+    productsPage.style.opacity = '1';
     productsPage.style.transform = 'translateY(0)';
-  });
+  }, 10);
   
   if (document.getElementById('productsFeed').children.length === 0) {
     loadProductsData();
   }
 }
 
-// Функция для скрытия страницы товаров с анимацией iOS
+// Функция для скрытия страницы товаров
 function hideProductsPage() {
   productsPageVisible = false;
+  productsPage.style.transform = 'translateY(100%)';
+  productsPage.style.opacity = '0';
   
-  productsPage.style.willChange = 'transform';
-  productsPage.style.transform = 'translateY(0)';
-  productsPage.style.transition = `transform ${IOS_ANIMATION.duration}ms ${IOS_ANIMATION.easing}`;
-  
-  // Анимация скрытия
-  requestAnimationFrame(() => {
-    productsPage.style.transform = 'translateY(100%)';
-  });
-  
-  // Анимация навигации
-  bottomNav.style.transition = `transform ${IOS_ANIMATION.duration}ms ${IOS_ANIMATION.easing}`;
-  bottomNav.style.transform = 'translateY(0)';
-  
-  // Очистка после анимации
   setTimeout(() => {
     productsPage.style.display = 'none';
-    productsPage.style.willChange = '';
-    productsPage.style.transform = '';
-    productsPage.style.transition = '';
-  }, IOS_ANIMATION.duration);
+    bottomNav.style.transform = 'translateY(0)';
+  }, 300);
 }
 
-// Обработчик движения касания с улучшенной анимацией следования за пальцем
+// Обработчик начала касания
+function handleTouchStart(e) {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  isHorizontalSwipe = false;
+  isVerticalSwipe = false;
+}
+
+// Обработчик движения касания
 function handleTouchMove(e) {
   if (!touchStartX) return;
   
@@ -6050,12 +5988,10 @@ function handleTouchMove(e) {
     e.preventDefault();
   }
   
-  // Обработка свайпа вниз для закрытия товаров с интерактивной анимацией
+  // Обработка свайпа вниз для закрытия товаров
   if (productsPageVisible && isVerticalSwipe && diffY > 0 && window.scrollY <= 0) {
     e.preventDefault();
-    const progress = Math.min(diffY / window.innerHeight, 1);
-    productsPage.style.transform = `translateY(${progress * 100}%)`;
-    productsPage.style.transition = 'none';
+    productsPage.style.opacity = 1 - diffY / 300;
   }
 }
 
@@ -6083,22 +6019,12 @@ function handleTouchEnd(e) {
   if (productsPageVisible && isVerticalSwipe && diffY > 100 && window.scrollY <= 0) {
     hideProductsPage();
   } else if (productsPageVisible && isVerticalSwipe) {
-    // Возвращаем на место если свайп недостаточно сильный
-    productsPage.style.transition = `transform ${IOS_ANIMATION.duration}ms ${IOS_ANIMATION.easing}`;
-    productsPage.style.transform = 'translateY(0)';
+    productsPage.style.opacity = '1';
   }
   
   // Сбрасываем начальные координаты
   touchStartX = 0;
   touchStartY = 0;
-  isHorizontalSwipe = false;
-  isVerticalSwipe = false;
-}
-
-// Обработчик начала касания
-function handleTouchStart(e) {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
   isHorizontalSwipe = false;
   isVerticalSwipe = false;
 }
@@ -6118,101 +6044,6 @@ function initSwipeNavigation() {
 
 // Инициализация свайп-навигации после загрузки DOM
 initSwipeNavigation();
-
-// Переменные для страницы отзывов
-let reviewsPageInitialized = false;
-const REVIEWS_STORAGE_KEY = 'follen_shaid_reviews';
-
-// Функция для показа страницы отзывов
-function showReviewsPage() {
-  // Скрываем все страницы
-  const allPages = [mainPage, cabinetPage, treasurePage, storagePage, paymentPage, reviewsPage];
-  allPages.forEach(page => {
-    if (page) page.style.display = 'none';
-  });
-  
-  // Показываем страницу отзывов
-  reviewsPage.style.display = 'block';
-  
-  // Инициализируем страницу отзывов при первом открытии
-  if (!reviewsPageInitialized) {
-    initReviewsPage();
-    reviewsPageInitialized = true;
-  }
-  
-  // Обновляем активную навигацию (ничего не выделяем)
-  updateActiveNav(null);
-  triggerVibration();
-}
-
-// Функция для скрытия страницы отзывов
-function hideReviewsPage() {
-  reviewsPage.style.display = 'none';
-  showPage(cabinetPage); // Возвращаемся в каюту
-  updateActiveNav(document.getElementById('cabinet-nav-item'));
-  triggerVibration();
-}
-
-// Инициализация страницы отзывов
-function initReviewsPage() {
-  // Получаем элементы
-  const reviewText = document.getElementById('review-text');
-  const reviewSubmitBtn = document.getElementById('review-submit-btn');
-  const reviewsListContainer = document.getElementById('reviews-list-container');
-  const reviewCharRemaining = document.getElementById('review-char-remaining');
-  const reviewProfanityError = document.getElementById('review-profanity-error');
-  const reviewRefreshBtn = document.getElementById('review-refresh-btn');
-  
-  // Генерация уникального ID пользователя
-  let userId, username;
-  if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
-    const user = Telegram.WebApp.initDataUnsafe.user;
-    userId = user.id.toString();
-    username = user.username || user.first_name || 'User_' + userId.substr(0, 4);
-  } else {
-    userId = 'user_' + Math.random().toString(36).substr(2, 9);
-    username = 'User_' + userId.substr(0, 4);
-  }
-  
-  // Список нецензурных слов
-  const profanityList = [
-    'бля', 'блять', 'хуй', 'пизда', 'ебал', 'ебать', 'нахер', 
-    'нахрен', 'гондон', 'мудак', 'сука', 'тварь', 'долбаёб'
-  ];
-  
-  // Проверяем, оставлял ли пользователь уже отзыв
-  const userReviewedKey = `user_reviewed_${userId}`;
-  if (localStorage.getItem(userReviewedKey)) {
-    hideReviewFormAndShowThankYou();
-  }
-  
-  // Загружаем существующие отзывы
-  loadReviews();
-  
-  // Обработчик кнопки обновления
-  reviewRefreshBtn.addEventListener('click', function() {
-    reviewRefreshBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Обновление...';
-    loadReviews();
-    setTimeout(() => {
-      reviewRefreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Обновить отзывы';
-      showReviewNotification('Отзывы обновлены');
-    }, 800);
-  });
-  
-  // Счетчик символов
-  reviewText.addEventListener('input', function() {
-    const remaining = 500 - reviewText.value.length;
-    reviewCharRemaining.textContent = remaining;
-    
-    if (remaining < 20) {
-      reviewCharRemaining.style.color = '#ff453a';
-    } else {
-      reviewCharRemaining.style.color = '#8e8e93';
-    }
-  });
-  
-  // Обработчик отправки отзыва
-  reviewSubmitBtn.addEventListener('click', submitReview);
   
   // Обработчик отправки по Enter (с зажатым Ctrl)
   reviewText.addEventListener('keydown', function(e) {
@@ -6393,7 +6224,7 @@ function initReviewsPage() {
   
   // Периодическое обновление отзывов (каждые 15 секунд)
   setInterval(loadReviews, 15000);
-}
+
 
 // Обновите обработчик кнопки "Отзывы" в каюте
 function setupReviewsButton() {
