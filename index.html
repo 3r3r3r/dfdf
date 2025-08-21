@@ -4537,516 +4537,6 @@ function handleProfileClick(action) {
   }
 }
 
-// ===== КОД ДЛЯ СТРАНИЦЫ СКЛАДА (НОВАЯ КОРЗИНА) =====
-let cart = [];
-let orders = [];
-let discount = 0;
-let promoApplied = false;
-let deliveryCost = 0;
-
-// Инициализация страницы склада
-function initStoragePage() {
-  // Загрузка данных из localStorage
-  cart = JSON.parse(localStorage.getItem('cart')) || [
-    { id: 1, name: "iPhone 13 Pro", price: 89990, originalPrice: 99990, image: "mobile-alt", quantity: 1, category: "Электроника", inStock: 5, isNew: true },
-    { id: 2, name: "AirPods Pro", price: 19990, image: "headphones", quantity: 2, category: "Аксессуары", inStock: 10 },
-    { id: 3, name: "Apple Watch S7", price: 39990, image: "clock", quantity: 1, category: "Электроника", inStock: 3 }
-  ];
-  
-  orders = JSON.parse(localStorage.getItem('orders')) || [
-    { id: 1001, date: "12.08.2023", items: ["iPhone 13 Pro", "Чехл для iPhone"], total: 92980, status: "delivered" },
-    { id: 1002, date: "05.08.2023", items: ["AirPods Pro"], total: 19990, status: "delivered" },
-    { id: 1003, date: "28.07.2023", items: ["MacBook Pro 14", "Apple Watch S7"], total: 239980, status: "processing" }
-  ];
-  
-  // Настройка обработчиков событий
-  setupStorageEventListeners();
-  
-  // Рендер содержимого
-  renderCartItems();
-  renderSuggestions();
-}
-
-// Настройка обработчиков событий для склада
-function setupStorageEventListeners() {
-  // Переключение вкладок
-  const tabs = document.querySelectorAll('#storage-page .tab');
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      
-      if (tab.dataset.tab === 'cart') {
-        document.querySelector('#storage-page .cart-content').classList.remove('hidden');
-        document.querySelector('#storage-page .ordered-content').classList.add('hidden');
-      } else {
-        document.querySelector('#storage-page .cart-content').classList.add('hidden');
-        document.querySelector('#storage-page .ordered-content').classList.remove('hidden');
-        renderOrderHistory();
-      }
-    });
-  });
-  
-  // Кнопка оформления заказа
-  const checkoutBtn = document.querySelector('#storage-page #checkout-btn');
-  if (checkoutBtn) {
-    checkoutBtn.addEventListener('click', () => {
-      document.querySelector('#storage-page #checkout-page').classList.add('visible');
-    });
-  }
-  
-  // Кнопка назад
-  const backBtn = document.querySelector('#storage-page #back-btn');
-  if (backBtn) {
-    backBtn.addEventListener('click', () => {
-      document.querySelector('#storage-page #checkout-page').classList.remove('visible');
-    });
-  }
-  
-  // Промокод
-  const applyPromoBtn = document.querySelector('#storage-page #apply-promo');
-  if (applyPromoBtn) {
-    applyPromoBtn.addEventListener('click', applyPromoCode);
-  }
-  
-  const promoInput = document.querySelector('#storage-page #promo-input');
-  if (promoInput) {
-    promoInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        applyPromoCode();
-      }
-    });
-  }
-  
-  // Поиск
-  const searchInput = document.querySelector('#storage-page #search-input');
-  if (searchInput) {
-    searchInput.addEventListener('input', renderCartItems);
-  }
-  
-  // Фильтры
-  const filterButtons = document.querySelectorAll('#storage-page .filter-btn');
-  filterButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      filterButtons.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      showToast(`Фильтр: ${btn.textContent}`);
-    });
-  });
-  
-  // Варианты доставки
-  const shippingOptions = document.querySelectorAll('#storage-page .shipping-option');
-  shippingOptions.forEach(option => {
-    option.addEventListener('click', () => {
-      shippingOptions.forEach(o => o.querySelector('.option-select').classList.remove('selected'));
-      option.querySelector('.option-select').classList.add('selected');
-      
-      if (option.querySelector('.option-price').textContent === '490 ₽') {
-        deliveryCost = 490;
-      } else {
-        deliveryCost = 0;
-      }
-      
-      updateTotal();
-    });
-  });
-}
-
-// Рендер товаров в корзине
-function renderCartItems() {
-  const cartItemsContainer = document.querySelector('#storage-page #cart-items');
-  if (!cartItemsContainer) return;
-  
-  cartItemsContainer.innerHTML = '';
-  
-  if (cart.length === 0) {
-    cartItemsContainer.innerHTML = `
-      <div class="empty-cart">
-        <i class="fas fa-shopping-cart" style="font-size: 50px; margin-bottom: 20px;"></i>
-        <h3>Ваша корзина пуста</h3>
-        <p>Добавьте товары из каталога</p>
-      </div>
-    `;
-    document.querySelector('#storage-page #checkout-btn').disabled = true;
-    return;
-  }
-  
-  document.querySelector('#storage-page #checkout-btn').disabled = false;
-  
-  // Применение поискового фильтра
-  const searchText = document.querySelector('#storage-page #search-input').value.toLowerCase();
-  const filteredCart = searchText ? 
-    cart.filter(item => item.name.toLowerCase().includes(searchText)) : 
-    cart;
-  
-  if (filteredCart.length === 0) {
-    cartItemsContainer.innerHTML = `
-      <div class="empty-cart">
-        <i class="fas fa-search" style="font-size: 50px; margin-bottom: 20px;"></i>
-        <h3>Ничего не найдено</h3>
-        <p>Попробуйте изменить поисковый запрос</p>
-      </div>
-    `;
-    return;
-  }
-  
-  filteredCart.forEach((product, index) => {
-    const cartItem = document.createElement('div');
-    cartItem.className = 'cart-item';
-    cartItem.dataset.id = product.id;
-    
-    const itemTotal = product.price * product.quantity;
-    const onSale = product.originalPrice && product.originalPrice > product.price;
-    const stockStatus = product.inStock > 5 ? 'in-stock' : (product.inStock > 0 ? 'low-stock' : 'out-of-stock');
-    const stockText = product.inStock > 5 ? 'В наличии' : (product.inStock > 0 ? `Осталось мало: ${product.inStock} шт.` : 'Нет в наличии');
-    
-    cartItem.innerHTML = `
-      <div class="item-image">
-        <i class="fas fa-${product.image}" style="font-size: 40px; color: #888;"></i>
-        ${product.isNew ? '<div class="item-badge">NEW</div>' : ''}
-      </div>
-      <div class="item-details">
-        <div class="item-category">${product.category}</div>
-        <h3 class="item-name">${product.name}</h3>
-        <div class="item-price">
-          ${onSale ? `<span class="original-price">${product.originalPrice.toLocaleString('ru-RU')} ₽</span>` : ''}
-          ${product.price.toLocaleString('ru-RU')} ₽
-          ${onSale ? '<span class="sale-badge">Скидка</span>' : ''}
-        </div>
-        <div class="item-total">${itemTotal.toLocaleString('ru-RU')} ₽</div>
-        <div class="stock-info ${stockStatus}">${stockText}</div>
-        <div class="item-quantity">
-          <div class="quantity-btn minus" data-id="${product.id}">
-            <i class="fas fa-minus"></i>
-          </div>
-          <span class="quantity-value">${product.quantity}</span>
-          <div class="quantity-btn plus" data-id="${product.id}">
-            <i class="fas fa-plus"></i>
-          </div>
-        </div>
-      </div>
-      <button class="favorite-btn" data-id="${product.id}">
-        <i class="fas fa-heart"></i>
-      </button>
-      <span class="swipe-hint"><i class="fas fa-chevron-left"></i> Свайп для действий</span>
-      <div class="swipe-actions">
-        <div class="swipe-left-action">
-          <span class="swipe-action-text">Удалить</span>
-        </div>
-        <div class="swipe-right-action">
-          <span class="swipe-action-text">Купить</span>
-        </div>
-      </div>
-    `;
-    
-    cartItemsContainer.appendChild(cartItem);
-    
-    // Настройка свайпа
-    setupSwipe(cartItem, product.id);
-    
-    // Анимация задержки для каждого элемента
-    cartItem.style.animationDelay = `${index * 0.1}s`;
-    cartItem.classList.add('slide-in');
-    
-    // Установка статуса избранного
-    const favoriteBtn = cartItem.querySelector('.favorite-btn');
-    const favorites = JSON.parse(localStorage.getItem('favorites')) || [];
-    if (favorites.includes(product.id)) {
-      favoriteBtn.classList.add('active');
-    }
-  });
-  
-  updateTotal();
-}
-
-// Рендер истории заказов
-function renderOrderHistory() {
-  const orderHistoryContainer = document.querySelector('#storage-page #order-history');
-  if (!orderHistoryContainer) return;
-  
-  orderHistoryContainer.innerHTML = '';
-  
-  orders.forEach(order => {
-    const orderElement = document.createElement('div');
-    orderElement.className = 'history-item';
-    
-    orderElement.innerHTML = `
-      <div class="history-image">
-        <i class="fas fa-box" style="font-size: 24px; color: #888;"></i>
-      </div>
-      <div class="history-details">
-        <div class="order-date">Заказ от ${order.date}</div>
-        <h3>${order.items.join(', ')}</h3>
-        <div class="order-total">${order.total.toLocaleString('ru-RU')} ₽</div>
-        <div class="order-status ${order.status === 'delivered' ? 'status-delivered' : 'status-processing'}">
-          ${order.status === 'delivered' ? 'Доставлен' : 'Обрабатывается'}
-        </div>
-      </div>
-    `;
-    
-    orderHistoryContainer.appendChild(orderElement);
-  });
-}
-
-// Рендер предложений
-function renderSuggestions() {
-  const suggestionsContainer = document.querySelector('#storage-page #suggestions');
-  if (!suggestionsContainer) return;
-  
-  suggestionsContainer.innerHTML = '';
-  
-  const suggestions = [
-    { id: 6, name: "Кабель Lightning", price: 1990, image: "bolt" },
-    { id: 7, name: "Адаптер питания", price: 2990, image: "plug" },
-    { id: 8, name: "Подставка для MacBook", price: 5990, image: "laptop" },
-    { id: 9, name: "Стекло для защиты", price: 1490, image: "mobile" },
-    { id: 10, name: "Беспроводная зарядка", price: 3990, image: "battery-full" }
-  ];
-  
-  suggestions.forEach(suggestion => {
-    const suggestionElement = document.createElement('div');
-    suggestionElement.className = 'suggestion-item';
-    
-    suggestionElement.innerHTML = `
-      <div class="suggestion-image">
-        <i class="fas fa-${suggestion.image}" style="font-size: 24px; color: #888;"></i>
-      </div>
-      <div class="suggestion-name">${suggestion.name}</div>
-      <div class="suggestion-price">${suggestion.price.toLocaleString('ru-RU')} ₽</div>
-      <button class="add-suggestion" data-id="${suggestion.id}">Добавить</button>
-    `;
-    
-    suggestionsContainer.appendChild(suggestionElement);
-  });
-  
-  // Добавление обработчиков событий для кнопок предложений
-  document.querySelectorAll('#storage-page .add-suggestion').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const productId = parseInt(e.target.dataset.id);
-      const product = suggestions.find(p => p.id === productId);
-      
-      // Проверка, есть ли товар уже в корзине
-      if (!cart.find(item => item.id === productId)) {
-        cart.push({...product, quantity: 1});
-        showToast('Товар добавлен в корзину');
-        renderCartItems();
-      } else {
-        showToast('Товар уже в корзине');
-      }
-    });
-  });
-}
-
-// Обновление общей суммы
-function updateTotal() {
-  const subtotal = cart.reduce((sum, product) => sum + (product.price * product.quantity), 0);
-  const discountAmount = promoApplied ? Math.round(subtotal * discount) : 0;
-  const total = subtotal - discountAmount + deliveryCost;
-  
-  document.querySelector('#storage-page #subtotal-value').textContent = `${subtotal.toLocaleString('ru-RU')} ₽`;
-  document.querySelector('#storage-page #discount-value').textContent = `-${discountAmount.toLocaleString('ru-RU')} ₽`;
-  document.querySelector('#storage-page #delivery-value').textContent = deliveryCost === 0 ? 'Бесплатно' : `${deliveryCost.toLocaleString('ru-RU')} ₽`;
-  document.querySelector('#storage-page #total-value').textContent = `${total.toLocaleString('ru-RU')} ₽`;
-  document.querySelector('#storage-page #items-count').textContent = cart.reduce((sum, product) => sum + product.quantity, 0);
-  
-  // Сохранение в localStorage
-  localStorage.setItem('cart', JSON.stringify(cart));
-}
-
-// Применение промокода
-function applyPromoCode() {
-  const promoInput = document.querySelector('#storage-page #promo-input');
-  if (!promoInput) return;
-  
-  const promoCode = promoInput.value.trim();
-  
-  if (promoCode === 'SUMMER20') {
-    discount = 0.2;
-    promoApplied = true;
-    showToast('Промокод применен! Скидка 20%');
-    updateTotal();
-  } else if (promoCode === 'WELCOME10') {
-    discount = 0.1;
-    promoApplied = true;
-    showToast('Промокод применен! Скидка 10%');
-    updateTotal();
-  } else if (promoCode) {
-    showToast('Неверный промокод');
-  }
-}
-
-// Настройка свайпа для элементов корзины
-function setupSwipe(element, productId) {
-  let startX, moveX, currentX = 0;
-  let isSwiping = false;
-  
-  element.addEventListener('touchstart', (e) => {
-    startX = e.touches[0].clientX;
-    isSwiping = true;
-  });
-  
-  element.addEventListener('touchmove', (e) => {
-    if (!isSwiping) return;
-    
-    moveX = e.touches[0].clientX;
-    const diffX = moveX - startX;
-    
-    // Ограничение расстояния свайпа
-    if (Math.abs(diffX) > 100) return;
-    
-    currentX = diffX;
-    element.style.transform = `translateX(${currentX}px)`;
-    
-    // Показ фона действий свайпа
-    const leftAction = element.querySelector('.swipe-left-action');
-    const rightAction = element.querySelector('.swipe-right-action');
-    
-    if (currentX < -30) {
-      leftAction.style.opacity = '1';
-      rightAction.style.opacity = '0';
-    } else if (currentX > 30) {
-      leftAction.style.opacity = '0';
-      rightAction.style.opacity = '1';
-    } else {
-      leftAction.style.opacity = '0';
-      rightAction.style.opacity = '0';
-    }
-  });
-  
-  element.addEventListener('touchend', () => {
-    isSwiping = false;
-    
-    if (currentX < -60) {
-      // Свайп влево - удалить элемент
-      element.classList.add('slide-out');
-      setTimeout(() => {
-                cart = cart.filter(item => item.id !== productId);
-        renderCartItems();
-        showToast('Товар удален из корзины');
-      }, 300);
-    } else if (currentX > 60) {
-      // Свайп вправо - купить сейчас
-      const product = cart.find(item => item.id === productId);
-      if (product) {
-        showToast(`Покупка: ${product.name}`);
-        // Здесь можно добавить логику быстрой покупки
-      }
-    }
-    
-    // Возврат элемента в исходное положение
-    element.style.transform = 'translateX(0)';
-    currentX = 0;
-    
-    // Скрыть фоны действий
-    element.querySelector('.swipe-left-action').style.opacity = '0';
-    element.querySelector('.swipe-right-action').style.opacity = '0';
-  });
-  
-  // Обработчики для кнопок количества
-  const minusBtn = element.querySelector('.quantity-btn.minus');
-  const plusBtn = element.querySelector('.quantity-btn.plus');
-  
-  minusBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const product = cart.find(item => item.id === productId);
-    if (product && product.quantity > 1) {
-      product.quantity--;
-      renderCartItems();
-      triggerVibration();
-    }
-  });
-  
-  plusBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const product = cart.find(item => item.id === productId);
-    if (product) {
-      product.quantity++;
-      renderCartItems();
-      triggerVibration();
-    }
-  });
-  
-  // Обработчик для кнопки избранного
-  const favoriteBtn = element.querySelector('.favorite-btn');
-  favoriteBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    favoriteBtn.classList.toggle('active');
-    
-    let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
-    if (favorites.includes(productId)) {
-      favorites = favorites.filter(id => id !== productId);
-      showToast('Удалено из избранного');
-    } else {
-      favorites.push(productId);
-      showToast('Добавлено в избранное');
-    }
-    localStorage.setItem('favorites', JSON.stringify(favorites));
-    triggerVibration();
-  });
-}
-
-// Показать уведомление
-function showToast(message) {
-  // Создаем элемент тоста, если его нет
-  let toast = document.querySelector('.toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.className = 'toast';
-    document.body.appendChild(toast);
-  }
-  
-  toast.textContent = message;
-  toast.classList.add('show');
-  
-  setTimeout(() => {
-    toast.classList.remove('show');
-  }, 3000);
-}
-
-// Инициализация обработчиков свайпа
-function initSwipeHandlers() {
-  // Обработчики для навигации свайпом между страницами
-  let startX, startY;
-  let currentPage = 'main-page';
-  
-  document.addEventListener('touchstart', (e) => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-  });
-  
-  document.addEventListener('touchend', (e) => {
-    if (!startX || !startY) return;
-    
-    const endX = e.changedTouches[0].clientX;
-    const endY = e.changedTouches[0].clientY;
-    
-    const diffX = endX - startX;
-    const diffY = endY - startY;
-    
-    // Проверяем, что это горизонтальный свайп, а не вертикальный
-    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-      // Определяем текущую страницу
-      const pages = ['main-page', 'cabinet-page', 'treasure-page', 'storage-page'];
-      const currentIndex = pages.indexOf(currentPage);
-      
-      if (diffX > 0 && currentIndex > 0) {
-        // Свайп вправо - перейти на предыдущую страницу
-        showPage(document.getElementById(pages[currentIndex - 1]));
-        currentPage = pages[currentIndex - 1];
-        updateActiveNav(document.querySelector(`[data-page="${pages[currentIndex - 1]}"]`));
-      } else if (diffX < 0 && currentIndex < pages.length - 1) {
-        // Свайп влево - перейти на следующую страницу
-        showPage(document.getElementById(pages[currentIndex + 1]));
-        currentPage = pages[currentIndex + 1];
-        updateActiveNav(document.querySelector(`[data-page="${pages[currentIndex + 1]}"]`));
-      }
-    }
-    
-    startX = null;
-    startY = null;
-  });
-}
-
 // Инициализация страницы пополнения
 function initPaymentPage() {
   const cardNumberInput = document.getElementById('cardNumberInput');
@@ -6339,6 +5829,472 @@ document.addEventListener('DOMContentLoaded', function() {
   // Добавьте эту строку в конец функции
   setupReviewsButton();
 });
+
+// ===== КОД ДЛЯ СТРАНИЦЫ СКЛАДА (НОВАЯ КОРЗИНА) =====
+let cart = [];
+let orders = [];
+let discount = 0;
+let promoApplied = false;
+let deliveryCost = 0;
+
+// Инициализация страницы склада
+function initStoragePage() {
+  // Загрузка данных из localStorage
+  cart = JSON.parse(localStorage.getItem('cart')) || [
+    { id: 1, name: "iPhone 13 Pro", price: 89990, originalPrice: 99990, image: "mobile-alt", quantity: 1, category: "Электроника", inStock: 5, isNew: true },
+    { id: 2, name: "AirPods Pro", price: 19990, image: "headphones", quantity: 2, category: "Аксессуары", inStock: 10 },
+    { id: 3, name: "Apple Watch S7", price: 39990, image: "clock", quantity: 1, category: "Электроника", inStock: 3 }
+  ];
+  
+  orders = JSON.parse(localStorage.getItem('orders')) || [
+    { id: 1001, date: "12.08.2023", items: ["iPhone 13 Pro", "Чехл для iPhone"], total: 92980, status: "delivered" },
+    { id: 1002, date: "05.08.2023", items: ["AirPods Pro"], total: 19990, status: "delivered" },
+    { id: 1003, date: "28.07.2023", items: ["MacBook Pro 14", "Apple Watch S7"], total: 239980, status: "processing" }
+  ];
+  
+  // Настройка обработчиков событий
+  setupStorageEventListeners();
+  
+  // Рендер содержимого
+  renderCartItems();
+  renderSuggestions();
+}
+
+// Настройка обработчиков событий для склада
+function setupStorageEventListeners() {
+  // Переключение вкладок
+  const tabs = document.querySelectorAll('#storage-page .tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      
+      if (tab.dataset.tab === 'cart') {
+        document.querySelector('#storage-page .cart-content').classList.remove('hidden');
+        document.querySelector('#storage-page .ordered-content').classList.add('hidden');
+      } else {
+        document.querySelector('#storage-page .cart-content').classList.add('hidden');
+        document.querySelector('#storage-page .ordered-content').classList.remove('hidden');
+        renderOrderHistory();
+      }
+    });
+  });
+  
+  // Кнопка оформления заказа
+  const checkoutBtn = document.querySelector('#storage-page #checkout-btn');
+  if (checkoutBtn) {
+    checkoutBtn.addEventListener('click', () => {
+      document.querySelector('#storage-page #checkout-page').classList.add('visible');
+    });
+  }
+  
+  // Кнопка назад
+  const backBtn = document.querySelector('#storage-page #back-btn');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      document.querySelector('#storage-page #checkout-page').classList.remove('visible');
+    });
+  }
+  
+  // Промокод
+  const applyPromoBtn = document.querySelector('#storage-page #apply-promo');
+  if (applyPromoBtn) {
+    applyPromoBtn.addEventListener('click', applyPromoCode);
+  }
+  
+  const promoInput = document.querySelector('#storage-page #promo-input');
+  if (promoInput) {
+    promoInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        applyPromoCode();
+      }
+    });
+  }
+  
+  // Поиск
+  const searchInput = document.querySelector('#storage-page #search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', renderCartItems);
+  }
+  
+  // Фильтры
+  const filterButtons = document.querySelectorAll('#storage-page .filter-btn');
+  filterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      showToast(`Фильтр: ${btn.textContent}`);
+    });
+  });
+  
+  // Варианты доставки
+  const shippingOptions = document.querySelectorAll('#storage-page .shipping-option');
+  shippingOptions.forEach(option => {
+    option.addEventListener('click', () => {
+      shippingOptions.forEach(o => o.querySelector('.option-select').classList.remove('selected'));
+      option.querySelector('.option-select').classList.add('selected');
+      
+      if (option.querySelector('.option-price').textContent === '490 ₽') {
+        deliveryCost = 490;
+      } else {
+        deliveryCost = 0;
+      }
+      
+      updateTotal();
+    });
+  });
+}
+
+// Рендер товаров в корзине
+function renderCartItems() {
+  const cartItemsContainer = document.querySelector('#storage-page #cart-items');
+  if (!cartItemsContainer) return;
+  
+  cartItemsContainer.innerHTML = '';
+  
+  if (cart.length === 0) {
+    cartItemsContainer.innerHTML = `
+      <div class="empty-cart">
+        <i class="fas fa-shopping-cart" style="font-size: 50px; margin-bottom: 20px;"></i>
+        <h3>Ваша корзина пуста</h3>
+        <p>Добавьте товары из каталога</p>
+      </div>
+    `;
+    document.querySelector('#storage-page #checkout-btn').disabled = true;
+    return;
+  }
+  
+  document.querySelector('#storage-page #checkout-btn').disabled = false;
+  
+  // Применение поискового фильтра
+  const searchText = document.querySelector('#storage-page #search-input').value.toLowerCase();
+  const filteredCart = searchText ? 
+    cart.filter(item => item.name.toLowerCase().includes(searchText)) : 
+    cart;
+  
+  if (filteredCart.length === 0) {
+    cartItemsContainer.innerHTML = `
+      <div class="empty-cart">
+        <i class="fas fa-search" style="font-size: 50px; margin-bottom: 20px;"></i>
+        <h3>Ничего не найдено</h3>
+        <p>Попробуйте изменить поисковый запрос</p>
+      </div>
+    `;
+    return;
+  }
+  
+  filteredCart.forEach((product, index) => {
+    const cartItem = document.createElement('div');
+    cartItem.className = 'cart-item';
+    cartItem.dataset.id = product.id;
+    
+    const itemTotal = product.price * product.quantity;
+    const onSale = product.originalPrice && product.originalPrice > product.price;
+    const stockStatus = product.inStock > 5 ? 'in-stock' : (product.inStock > 0 ? 'low-stock' : 'out-of-stock');
+    const stockText = product.inStock > 5 ? 'В наличии' : (product.inStock > 0 ? `Осталось мало: ${product.inStock} шт.` : 'Нет в наличии');
+    
+    cartItem.innerHTML = `
+      <div class="item-image">
+        <i class="fas fa-${product.image}" style="font-size: 40px; color: #888;"></i>
+        ${product.isNew ? '<div class="item-badge">NEW</div>' : ''}
+      </div>
+      <div class="item-details">
+        <div class="item-category">${product.category}</div>
+        <h3 class="item-name">${product.name}</h3>
+        <div class="item-price">
+          ${onSale ? `<span class="original-price">${product.originalPrice.toLocaleString('ru-RU')} ₽</span>` : ''}
+          ${product.price.toLocaleString('ru-RU')} ₽
+          ${onSale ? '<span class="sale-badge">Скидка</span>' : ''}
+        </div>
+        <div class="item-total">${itemTotal.toLocaleString('ru-RU')} ₽</div>
+        <div class="stock-info ${stockStatus}">${stockText}</div>
+        <div class="item-quantity">
+          <div class="quantity-btn minus" data-id="${product.id}">
+            <i class="fas fa-minus"></i>
+          </div>
+          <span class="quantity-value">${product.quantity}</span>
+          <div class="quantity-btn plus" data-id="${product.id}">
+            <i class="fas fa-plus"></i>
+          </div>
+        </div>
+      </div>
+      <button class="favorite-btn" data-id="${product.id}">
+        <i class="fas fa-heart"></i>
+      </button>
+      <span class="swipe-hint"><i class="fas fa-chevron-left"></i> Свайп для действий</span>
+      <div class="swipe-actions">
+        <div class="swipe-left-action">
+          <span class="swipe-action-text">Удалить</span>
+        </div>
+        <div class="swipe-right-action">
+          <span class="swipe-action-text">Купить</span>
+        </div>
+      </div>
+    `;
+    
+    cartItemsContainer.appendChild(cartItem);
+    
+    // Настройка свайпа
+    setupSwipe(cartItem, product.id);
+    
+    // Анимация задержки для каждого элемента
+    cartItem.style.animationDelay = `${index * 0.1}s`;
+    cartItem.classList.add('slide-in');
+    
+    // Установка статуса избранного
+    const favoriteBtn = cartItem.querySelector('.favorite-btn');
+    const favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+    if (favorites.includes(product.id)) {
+      favoriteBtn.classList.add('active');
+    }
+  });
+  
+  updateTotal();
+}
+
+// Рендер истории заказов
+function renderOrderHistory() {
+  const orderHistoryContainer = document.querySelector('#storage-page #order-history');
+  if (!orderHistoryContainer) return;
+  
+  orderHistoryContainer.innerHTML = '';
+  
+  orders.forEach(order => {
+    const orderElement = document.createElement('div');
+    orderElement.className = 'history-item';
+    
+    orderElement.innerHTML = `
+      <div class="history-image">
+        <i class="fas fa-box" style="font-size: 24px; color: #888;"></i>
+      </div>
+      <div class="history-details">
+        <div class="order-date">Заказ от ${order.date}</div>
+        <h3>${order.items.join(', ')}</h3>
+        <div class="order-total">${order.total.toLocaleString('ru-RU')} ₽</div>
+        <div class="order-status ${order.status === 'delivered' ? 'status-delivered' : 'status-processing'}">
+          ${order.status === 'delivered' ? 'Доставлен' : 'Обрабатывается'}
+        </div>
+      </div>
+    `;
+    
+    orderHistoryContainer.appendChild(orderElement);
+  });
+}
+
+// Рендер предложений
+function renderSuggestions() {
+  const suggestionsContainer = document.querySelector('#storage-page #suggestions');
+  if (!suggestionsContainer) return;
+  
+  suggestionsContainer.innerHTML = '';
+  
+  const suggestions = [
+    { id: 6, name: "Кабель Lightning", price: 1990, image: "bolt" },
+    { id: 7, name: "Адаптер питания", price: 2990, image: "plug" },
+    { id: 8, name: "Подставка для MacBook", price: 5990, image: "laptop" },
+    { id: 9, name: "Стекло для защиты", price: 1490, image: "mobile" },
+    { id: 10, name: "Беспроводная зарядка", price: 3990, image: "battery-full" }
+  ];
+  
+  suggestions.forEach(suggestion => {
+    const suggestionElement = document.createElement('div');
+    suggestionElement.className = 'suggestion-item';
+    
+    suggestionElement.innerHTML = `
+      <div class="suggestion-image">
+        <i class="fas fa-${suggestion.image}" style="font-size: 24px; color: #888;"></i>
+      </div>
+      <div class="suggestion-name">${suggestion.name}</div>
+      <div class="suggestion-price">${suggestion.price.toLocaleString('ru-RU')} ₽</div>
+      <button class="add-suggestion" data-id="${suggestion.id}">Добавить</button>
+    `;
+    
+    suggestionsContainer.appendChild(suggestionElement);
+  });
+  
+  // Добавление обработчиков событий для кнопок предложений
+  document.querySelectorAll('#storage-page .add-suggestion').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const productId = parseInt(e.target.dataset.id);
+      const product = suggestions.find(p => p.id === productId);
+      
+      // Проверка, есть ли товар уже в корзине
+      if (!cart.find(item => item.id === productId)) {
+        cart.push({...product, quantity: 1});
+        showToast('Товар добавлен в корзину');
+        renderCartItems();
+      } else {
+        showToast('Товар уже в корзине');
+      }
+    });
+  });
+}
+
+// Обновление общей суммы
+function updateTotal() {
+  const subtotal = cart.reduce((sum, product) => sum + (product.price * product.quantity), 0);
+  const discountAmount = promoApplied ? Math.round(subtotal * discount) : 0;
+  const total = subtotal - discountAmount + deliveryCost;
+  
+  document.querySelector('#storage-page #subtotal-value').textContent = `${subtotal.toLocaleString('ru-RU')} ₽`;
+  document.querySelector('#storage-page #discount-value').textContent = `-${discountAmount.toLocaleString('ru-RU')} ₽`;
+  document.querySelector('#storage-page #delivery-value').textContent = deliveryCost === 0 ? 'Бесплатно' : `${deliveryCost.toLocaleString('ru-RU')} ₽`;
+  document.querySelector('#storage-page #total-value').textContent = `${total.toLocaleString('ru-RU')} ₽`;
+  document.querySelector('#storage-page #items-count').textContent = cart.reduce((sum, product) => sum + product.quantity, 0);
+  
+  // Сохранение в localStorage
+  localStorage.setItem('cart', JSON.stringify(cart));
+}
+
+// Применение промокода
+function applyPromoCode() {
+  const promoInput = document.querySelector('#storage-page #promo-input');
+  if (!promoInput) return;
+  
+  const promoCode = promoInput.value.trim();
+  
+  if (promoCode === 'SUMMER20') {
+    discount = 0.2;
+    promoApplied = true;
+    showToast('Промокод применен! Скидка 20%');
+    updateTotal();
+  } else if (promoCode === 'WELCOME10') {
+    discount = 0.1;
+    promoApplied = true;
+    showToast('Промокод применен! Скидка 10%');
+    updateTotal();
+  } else if (promoCode) {
+    showToast('Неверный промокод');
+  }
+}
+
+// Настройка свайпа для элементов корзины
+function setupSwipe(element, productId) {
+  let startX, moveX, currentX = 0;
+  let isSwiping = false;
+  
+  element.addEventListener('touchstart', (e) => {
+    startX = e.touches[0].clientX;
+    isSwiping = true;
+  });
+  
+  element.addEventListener('touchmove', (e) => {
+    if (!isSwiping) return;
+    
+    moveX = e.touches[0].clientX;
+    const diffX = moveX - startX;
+    
+    // Ограничение расстояния свайпа
+    if (Math.abs(diffX) > 100) return;
+    
+    currentX = diffX;
+    element.style.transform = `translateX(${currentX}px)`;
+    
+    // Показ фона действий свайпа
+    const leftAction = element.querySelector('.swipe-left-action');
+    const rightAction = element.querySelector('.swipe-right-action');
+    
+    if (currentX < -30) {
+      leftAction.style.opacity = '1';
+      rightAction.style.opacity = '0';
+    } else if (currentX > 30) {
+      leftAction.style.opacity = '0';
+      rightAction.style.opacity = '1';
+    } else {
+      leftAction.style.opacity = '0';
+      rightAction.style.opacity = '0';
+    }
+  });
+  
+  element.addEventListener('touchend', () => {
+    isSwiping = false;
+    
+    if (currentX < -60) {
+      // Свайп влево - удалить элемент
+      element.classList.add('slide-out');
+      setTimeout(() => {
+                cart = cart.filter(item => item.id !== productId);
+        renderCartItems();
+        showToast('Товар удален из корзины');
+      }, 300);
+    } else if (currentX > 60) {
+      // Свайп вправо - купить сейчас
+      const product = cart.find(item => item.id === productId);
+      if (product) {
+        showToast(`Покупка: ${product.name}`);
+        // Здесь можно добавить логику быстрой покупки
+      }
+    }
+    
+    // Возврат элемента в исходное положение
+    element.style.transform = 'translateX(0)';
+    currentX = 0;
+    
+    // Скрыть фоны действий
+    element.querySelector('.swipe-left-action').style.opacity = '0';
+    element.querySelector('.swipe-right-action').style.opacity = '0';
+  });
+  
+  // Обработчики для кнопок количества
+  const minusBtn = element.querySelector('.quantity-btn.minus');
+  const plusBtn = element.querySelector('.quantity-btn.plus');
+  
+  minusBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const product = cart.find(item => item.id === productId);
+    if (product && product.quantity > 1) {
+      product.quantity--;
+      renderCartItems();
+      triggerVibration();
+    }
+  });
+  
+  plusBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const product = cart.find(item => item.id === productId);
+    if (product) {
+      product.quantity++;
+      renderCartItems();
+      triggerVibration();
+    }
+  });
+  
+  // Обработчик для кнопки избранного
+  const favoriteBtn = element.querySelector('.favorite-btn');
+  favoriteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    favoriteBtn.classList.toggle('active');
+    
+    let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
+    if (favorites.includes(productId)) {
+      favorites = favorites.filter(id => id !== productId);
+      showToast('Удалено из избранного');
+    } else {
+      favorites.push(productId);
+      showToast('Добавлено в избранное');
+    }
+    localStorage.setItem('favorites', JSON.stringify(favorites));
+    triggerVibration();
+  });
+}
+
+// Показать уведомление
+function showToast(message) {
+  // Создаем элемент тоста, если его нет
+  let toast = document.querySelector('.toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.className = 'toast';
+    document.body.appendChild(toast);
+  }
+  
+  toast.textContent = message;
+  toast.classList.add('show');
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3000);
+}
 </script>
 </body>
 </html>
